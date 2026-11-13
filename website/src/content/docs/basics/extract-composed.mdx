@@ -1,0 +1,178 @@
+---
+sidebar_label: Composed Extraction
+sidebar_position: 7
+description: Extract data from declarative shadow DOM as a composed tree.
+---
+
+# Composed Extraction with `extractComposed`
+
+[Declarative shadow DOM](https://developer.mozilla.org/docs/Web/HTML/Reference/Elements/template#declarative_shadow_dom)
+hides a component's markup inside a `<template shadowrootmode>` element and
+displays its light children through `<slot>` placeholders. A regular
+[`extract`](/docs/basics/extract/) sees the **physical** document, so slots and
+the content assigned to them appear in completely different places.
+
+`extractComposed` takes the same descriptor map as `extract`, but matches every
+selector against a virtual **composed tree**: shadow roots are expanded, slots
+are replaced by their assigned nodes, and extraction then works exactly like
+`extract`. The original document is never modified.
+
+## A first example
+
+```js
+import * as cheerio from 'cheerio';
+
+const $ = cheerio.load(`
+  <my-card>
+    <template shadowrootmode="open">
+      <h2><slot name="title"></slot></h2>
+      <div class="body"><slot></slot></div>
+    </template>
+    <span slot="title">Hello</span>
+    <p>World</p>
+  </my-card>
+`);
+
+$.extractComposed({ title: 'h2', body: '.body' });
+//=> { title: 'Hello', body: 'World' }
+```
+
+The same map given to the regular `extract` cannot see the slotted content,
+because the light `<span>` and `<p>` are not descendants of the shadow
+elements in the physical DOM:
+
+```js
+$.extract({ title: 'h2', body: '.body' });
+//=> { title: '', body: '' }
+```
+
+## Descriptor maps are identical to `extract`
+
+Everything `extract` supports works unchanged: selector strings default to
+`textContent`, descriptor objects can pick another property or a nested map,
+and an array-wrapped descriptor collects every match.
+
+```js
+$.extractComposed({
+  // First match, text content
+  title: 'h2',
+  // Every match
+  links: ['a'],
+  // Another property
+  markup: { selector: '.body', value: 'innerHTML' },
+  // Nested extraction
+  card: {
+    selector: 'my-card',
+    value: { title: 'h2', body: '.body' },
+  },
+});
+```
+
+You can also call the method on a selection to limit the extraction scope, and
+the result types are inferred from the map just like with `extract`:
+
+```js
+$('my-card').extractComposed({ title: 'h2' });
+//=> { title: 'Hello' }
+```
+
+## How the composed tree is built
+
+### Shadow roots
+
+The **first direct child** of an element that is a
+`<template shadowrootmode="…">` is treated as the element's shadow root.
+
+- `shadowrootmode="open"` expands the template's content in place. The template
+  element itself does not appear in the composed tree.
+- `shadowrootmode="closed"` keeps the host element (including its attributes),
+  but nothing inside it — neither the shadow content nor the host's light
+  children — is reachable from the composed tree.
+- A plain `<template>` without a `shadowrootmode` attribute is an ordinary
+  element and is **not** expanded.
+
+```js
+const $closed = cheerio.load(`
+  <host id="h">
+    <template shadowrootmode="closed"><p class="secret">x</p></template>
+    <span>light</span>
+  </host>
+`);
+
+$closed.extractComposed({
+  host: '#h', // The host itself stays visible …
+  secret: ['.secret'], // … but its contents are unreachable: []
+  light: ['span'], //=> []
+});
+```
+
+### Slot assignment
+
+Light children of a shadow host are assigned to slots following the browser
+rules:
+
+- A node with a `slot="name"` attribute is assigned to the first slot with that
+  `name`. If several slots share a name, **only the first one receives nodes**;
+  the others render their fallback content.
+- Nodes without a `slot` attribute go to the first default slot (a `<slot>`
+  without a `name`), in tree order.
+- A slot renders its **fallback content** (its own children) only when no node
+  is assigned to it.
+- Light nodes that no slot accepts do not appear anywhere in the composed tree.
+- Whitespace-only text nodes between elements are never assigned to slots.
+
+```js
+const $ = cheerio.load(`
+  <my-card>
+    <template shadowrootmode="open">
+      <slot name="title"><i>Untitled</i></slot>
+      <slot><i>No body</i></slot>
+    </template>
+  </my-card>
+`);
+
+// No light children at all: every slot falls back.
+$.extractComposed({ fallbacks: ['i'] });
+//=> { fallbacks: ['Untitled', 'No body'] }
+```
+
+### Nested hosts and repeated nodes
+
+Shadow hosts may be nested, including inside slotted content; each host expands
+its own shadow tree and tree order is preserved throughout.
+
+The composed tree is a **view** over the physical document. Nodes are never
+cloned: when a light node is displayed through a slot, function descriptors
+still receive the exact same object you would get from a regular selection, so
+attribute reads and identity checks keep working.
+
+## Values are computed on the composed tree
+
+`textContent`, `innerText`, `innerHTML`, `outerHTML`, `tagName` and friends are
+computed as if the expanded, slot-flattened tree were the real document. The
+one deliberate exception is URL resolution: `href` (on `a` and `link`) and
+`src` (on `img`, `iframe`, `audio`, `video` and `source`) are still resolved
+against the **original document's** `baseURI`, even when the element is shown
+through a slot.
+
+```js
+const $ = cheerio.load(
+  `
+  <host>
+    <template shadowrootmode="open"><slot></slot></template>
+    <a href="page">link</a>
+  </host>
+`,
+  { baseURI: 'https://example.com/base/' },
+);
+
+$.extractComposed({ href: { selector: 'a', value: 'href' } });
+//=> { href: 'https://example.com/base/page' }
+```
+
+## The input document is never modified
+
+Building the composed view only allocates wrapper objects; no physical node is
+moved, re-parented, cloned or edited, and no scripts are executed. Calling
+`extractComposed` repeatedly — including interleaved with regular `extract`
+calls — yields identical results and leaves `$.html()` byte-for-byte unchanged.

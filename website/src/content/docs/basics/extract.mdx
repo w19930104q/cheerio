@@ -224,3 +224,11 @@ const data = $.extract({
   ],
 });
 ```
+
+## See also
+
+If your document contains declarative shadow DOM
+(`<template shadowrootmode>` and `<slot>`), use
+[`extractComposed`](/docs/basics/extract-composed/) instead. It accepts the
+same descriptor maps but matches against the expanded, slot-flattened composed
+tree without modifying the document.

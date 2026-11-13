@@ -249,6 +249,23 @@ export function extract<M extends ExtractMap>(
   return this.root().extract(map);
 }
 
+/**
+ * Extract multiple values from the document's composed tree, expanding
+ * declarative shadow roots and flattening slots before matching.
+ *
+ * @category Static
+ * @param map - An object containing key-value pairs. The keys are the names of
+ *   the properties to be created on the object, and the values are the
+ *   selectors to be used to extract the values.
+ * @returns An object containing the extracted values.
+ */
+export function extractComposed<M extends ExtractMap>(
+  this: CheerioAPI,
+  map: M,
+): ExtractedMap<M> {
+  return this.root().extractComposed(map);
+}
+
 type Writable<T> = { -readonly [P in keyof T]: T[P] };
 
 /**

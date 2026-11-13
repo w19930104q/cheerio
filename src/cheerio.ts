@@ -2,6 +2,7 @@ import type { AnyNode, Document, ParentNode } from 'domhandler';
 import * as Attributes from './api/attributes.js';
 import * as Css from './api/css.js';
 import * as Extract from './api/extract.js';
+import * as ComposedExtract from './api/extract-composed.js';
 import * as Forms from './api/forms.js';
 import * as Manipulation from './api/manipulation.js';
 import * as Traversing from './api/traversing.js';
@@ -13,7 +14,8 @@ type MethodsType = typeof Attributes &
   typeof Manipulation &
   typeof Css &
   typeof Forms &
-  typeof Extract;
+  typeof Extract &
+  typeof ComposedExtract;
 
 /**
  * The cheerio class is the central class of the library. It wraps a set of
@@ -140,4 +142,5 @@ Object.assign(
   Css,
   Forms,
   Extract,
+  ComposedExtract,
 );

@@ -13,7 +13,7 @@ const config: ViteUserConfig = defineConfig({
     },
     typecheck: {
       enabled: true,
-      include: ['src/api/extract.spec.ts'],
+      include: ['src/api/extract.spec.ts', 'src/api/extract-composed.spec.ts'],
     },
   },
 });

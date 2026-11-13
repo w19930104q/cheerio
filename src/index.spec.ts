@@ -235,4 +235,52 @@ describe('fromURL', () => {
     );
     expect($('#rooted').prop('href')).toBe(`http://localhost:${port}/link`);
   });
+
+  it('should resolve a relative document base against the final URL after redirects', async () => {
+    const port = await createTestServer('text/html', '', (req, res) => {
+      if (req.url === '/first') {
+        res.writeHead(302, {
+          Location: `http://localhost:${port}/final/dir/page`,
+        });
+        res.end();
+      } else {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(
+          '<html><head><base href="../assets/" /></head><body><a href="page.html">a</a></body></html>',
+        );
+      }
+    });
+
+    const $ = await cheerio.fromURL(`http://localhost:${port}/first`, {
+      useDocumentBaseURI: true,
+    });
+
+    expect($('a').prop('href')).toBe(
+      `http://localhost:${port}/final/assets/page.html`,
+    );
+  });
+
+  it('should resolve xml:base against the final URL after redirects', async () => {
+    const port = await createTestServer(
+      'application/atom+xml',
+      '',
+      (req, res) => {
+        if (req.url === '/first') {
+          res.writeHead(302, { Location: `http://localhost:${port}/feed` });
+          res.end();
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/atom+xml' });
+          res.end(
+            '<feed xml:base="entries/"><entry><link href="1" /></entry></feed>',
+          );
+        }
+      },
+    );
+
+    const $ = await cheerio.fromURL(`http://localhost:${port}/first`, {
+      useDocumentBaseURI: true,
+    });
+
+    expect($('link').prop('href')).toBe(`http://localhost:${port}/entries/1`);
+  });
 });

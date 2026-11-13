@@ -47,6 +47,19 @@ export interface CheerioOptions
   baseURI?: string | URL;
 
   /**
+   * Resolve the `href` and `src` props against the document's own base URI:
+   * the `href` of the first `<base>` element in HTML documents, or the
+   * `xml:base` attributes of the element's ancestors in XML documents.
+   *
+   * Relative document bases are resolved against the `baseURI` option. If no
+   * absolute base URI can be determined, the original attribute value is
+   * returned.
+   *
+   * @default false
+   */
+  useDocumentBaseURI?: boolean;
+
+  /**
    * Is the document in quirks mode?
    *
    * This will lead to `.className` and `#id` being case-insensitive.

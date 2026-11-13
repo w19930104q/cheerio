@@ -6,6 +6,7 @@
 
 import { type AnyNode, type Element, isDocument, isTag } from 'domhandler';
 import { innerText, textContent } from 'domutils';
+import { getDocumentBaseURI, getLocalName, resolveUrl } from '../base.js';
 import type { Cheerio } from '../cheerio.js';
 import { text } from '../static.js';
 import { camelCase, cssCase, domEach } from '../utils.js';
@@ -332,6 +333,10 @@ export function prop<T extends AnyNode>(
  * Resolve `href` or `src` of supported elements. Requires the `baseURI` option
  * to be set, and a global `URL` object to be part of the environment.
  *
+ * With the `useDocumentBaseURI` option enabled, the document's own base URI is
+ * used instead: the `href` of the first `<base>` element in HTML documents, or
+ * the `xml:base` attributes of the element's ancestors in XML documents.
+ *
  * @example With `baseURI` set to `'https://example.com'`:
  *
  * ```js
@@ -453,10 +458,33 @@ export function prop<T extends AnyNode>(
         if (!isTag(el)) return;
         const prop = el.attribs?.[name];
 
+        if (typeof URL === 'undefined' || prop === undefined) {
+          return prop;
+        }
+
+        if (this.options.useDocumentBaseURI) {
+          /*
+           * Resolve against the document's own base URI. In XML documents,
+           * namespaced elements (eg. Atom's `<atom:link>`) are matched by
+           * their local name.
+           */
+          const tagName = this.options.xmlMode
+            ? getLocalName(el.tagName)
+            : el.tagName;
+
+          if ((name === 'href' ? hrefTags : srcTags).has(tagName)) {
+            const baseURI = getDocumentBaseURI(el, this.options);
+            const resolved = resolveUrl(prop, baseURI);
+
+            // Keep the original attribute if no absolute URL can be produced.
+            if (resolved !== undefined) return resolved;
+          }
+
+          return prop;
+        }
+
         if (
-          typeof URL !== 'undefined' &&
           (name === 'href' ? hrefTags : srcTags).has(el.tagName) &&
-          prop !== undefined &&
           this.options.baseURI
         ) {
           return new URL(prop, this.options.baseURI).href;
